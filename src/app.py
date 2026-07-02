@@ -92,9 +92,20 @@ def get_activities():
     return activities
 
 
+@app.post("/activities/signup")
+def signup_without_activity_name(email: str):
+    raise HTTPException(status_code=400, detail="Activity name is required")
+
+
 @app.post("/activities/{activity_name}/signup")
 def signup_for_activity(activity_name: str, email: str):
     """Sign up a student for an activity"""
+    if not activity_name or not activity_name.strip():
+        raise HTTPException(status_code=400, detail="Activity name is required")
+
+    if not email or not email.strip():
+        raise HTTPException(status_code=400, detail="Email is required")
+
     # Validate activity exists
     if activity_name not in activities:
         raise HTTPException(status_code=404, detail="Activity not found")
@@ -102,25 +113,41 @@ def signup_for_activity(activity_name: str, email: str):
     # Get the specific activity
     activity = activities[activity_name]
 
-    # Validate student is not already signed up
-    if email in activity["participants"]:
+    normalized_email = email.strip().lower()
+    normalized_participants = [participant.strip().lower() for participant in activity["participants"]]
+
+    if normalized_email in normalized_participants:
         raise HTTPException(status_code=400, detail="Student already signed up for this activity")
 
-    # Add student
-    activity["participants"].append(email)
-    return {"message": f"Signed up {email} for {activity_name}"}
+    if len(activity["participants"]) >= activity["max_participants"]:
+        raise HTTPException(status_code=400, detail="Activity is full")
+
+    activity["participants"].append(email.strip())
+    return {"message": f"Signed up {email.strip()} for {activity_name}"}
 
 
 @app.delete("/activities/{activity_name}/participants/{email}")
 def unregister_participant(activity_name: str, email: str):
     """Remove a participant from an activity"""
+    if not activity_name or not activity_name.strip():
+        raise HTTPException(status_code=400, detail="Activity name is required")
+
+    if not email or not email.strip():
+        raise HTTPException(status_code=400, detail="Email is required")
+
     if activity_name not in activities:
         raise HTTPException(status_code=404, detail="Activity not found")
 
     activity = activities[activity_name]
+    normalized_email = email.strip().lower()
+    normalized_participants = [participant.strip().lower() for participant in activity["participants"]]
 
-    if email not in activity["participants"]:
+    if normalized_email not in normalized_participants:
         raise HTTPException(status_code=404, detail="Participant not found")
 
-    activity["participants"].remove(email)
-    return {"message": f"Unregistered {email} from {activity_name}"}
+    matching_index = next(
+        index for index, participant in enumerate(activity["participants"])
+        if participant.strip().lower() == normalized_email
+    )
+    del activity["participants"][matching_index]
+    return {"message": f"Unregistered {email.strip()} from {activity_name}"}
